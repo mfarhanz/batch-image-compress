@@ -165,12 +165,12 @@ export async function handleUpload(files) {
     for (let i = 0; i < files.length; i += batchSize) {
         const batch = Array.from(files).slice(i, i + batchSize);
         const formData = new FormData();
+        formData.append("clientId", socket.id);
         batch.forEach(file => formData.append("images", file));
 
         // add current settings
         formData.append("maxSize", document.getElementById("maxSize").value);
         formData.append("quality", document.getElementById("quality").value);
-        formData.append("clientId", socket.id);
 
         try {
             const res = await fetch(`${serverUrl}/upload`, { method: "POST", body: formData });

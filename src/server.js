@@ -11,6 +11,9 @@ import 'dotenv/config'
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const UPLOADS_DIR = process.env.VITE_UPLOADS_DIR;
+const OUTPUT_DIR = process.env.VITE_OUTPUT_DIR;
+const limitThreads = pLimit(3); // max 3 concurrent tasks
 const server = createServer(app);
 const io = new Server(server, {
 	transports: ["polling", "websocket"],
@@ -20,14 +23,38 @@ const io = new Server(server, {
 	},
 });
 
-const limitThreads = pLimit(3); // max 3 concurrent tasks
+const storage = multer.diskStorage({
+	destination: (req, file, cb) => {
+		console.log(req, file, cb);
+		const clientId = req.body.clientId;
+		if (!clientId) {
+			return cb(new Error("Missing clientId"));
+		}
+
+		const dir = path.join("uploads", clientId);
+
+		// create folder if it doesn't exist
+		if (!fs.existsSync(dir)) {
+			fs.mkdirSync(dir, { recursive: true });
+		}
+
+		cb(null, dir);
+	},
+
+	filename: (req, file, cb) => {
+		const uniqueName = Date.now() + "-" + file.originalname;
+		cb(null, uniqueName);
+	}
+});
+
 const upload = multer({
-	dest: "uploads/",
+	storage,
 	limits: {
-		fileSize: 100 * 1024 * 1024, // max 50MB per file
+		fileSize: 100 * 1024 * 1024,  // max 100MB per file
 		files: 300,                 // max 500 files per request
 	},
 });
+
 
 app.use(cors({ origin: process.env.VITE_CLIENT_URL }));
 app.use(express.static("public"));
@@ -57,11 +84,38 @@ process.on("uncaughtException", (err) => {
 });
 
 function cleanup() {
-	const uploadsDir = process.env.VITE_UPLOADS_DIR;
-	const outputDir = process.env.VITE_OUTPUT_DIR;
-	emptyDir(uploadsDir);
-	emptyDir(outputDir);
+	safeRemoveDir(UPLOADS_DIR);
+	safeRemoveDir(OUTPUT_DIR);
 	console.log("Uploads and output folders emptied");
+}
+
+function safeRemoveDir(dirPath, retries = 5) {
+	if (!fs.existsSync(dirPath)) return;
+
+	try {
+		fs.rmSync(dirPath, { recursive: true, force: true });
+		console.log(`Deleted ${dirPath}`);
+	} catch (err) {
+		if (err.code === "EBUSY" && retries > 0) {
+			console.warn(`Dir busy, retrying (${retries})...: ${dirPath}`);
+			setTimeout(() => safeRemoveDir(dirPath, retries - 1), 1000);
+		} else {
+			console.error("Failed to remove dir:", dirPath, err);
+		}
+	}
+}
+
+function safeUnlink(filePath, retries = 5) {
+	try {
+		fs.unlinkSync(filePath);
+	} catch (err) {
+		if (err.code === "EBUSY" && retries > 0) {
+			console.warn(`File busy, retrying (${retries}): ${filePath}`);
+			setTimeout(() => safeUnlink(filePath, retries - 1), 1000);
+		} else {
+			console.error("Failed to delete file:", filePath, err);
+		}
+	}
 }
 
 // Helper to empty a directory
@@ -70,13 +124,23 @@ function emptyDir(dirPath) {
 
 	fs.readdirSync(dirPath).forEach(file => {
 		const fullPath = path.join(dirPath, file);
-		const stat = fs.statSync(fullPath);
-		if (stat.isDirectory()) {
-			fs.rmSync(fullPath, { recursive: true, force: true });
-		} else {
-			fs.unlinkSync(fullPath);
+		try {
+			const stat = fs.statSync(fullPath);
+			if (stat.isDirectory()) {
+				safeRemoveDir(fullPath);
+			} else {
+				safeUnlink(fullPath);
+			}
+		} catch (err) {
+			console.error("Error accessing:", fullPath, err);
 		}
 	});
+}
+
+function ensureDir(dirPath) {
+	if (!fs.existsSync(dirPath)) {
+		fs.mkdirSync(dirPath, { recursive: true });
+	}
 }
 
 const isSkippable = (file) => {
@@ -89,8 +153,17 @@ const isSkippable = (file) => {
 // WebSocket connection
 io.on("connection", (socket) => {
 	console.log("Client connected:", socket.id);
+
 	socket.on("disconnect", () => {
 		console.log("Client disconnected:", socket.id);
+
+		const uploadsDir = path.join(UPLOADS_DIR, socket.id);
+		const outputDir = path.join(OUTPUT_DIR, socket.id);
+		setTimeout(() => {
+			[uploadsDir, outputDir].forEach(dir => {
+				safeRemoveDir(dir);
+			});
+		}, 2000); // 2s buffer for file handles to release
 	});
 });
 
@@ -104,13 +177,14 @@ app.post("/upload", upload.array("images"), async (req, res) => {
 		const rawQuality = parseInt(req.body.quality) || 80;
 		const quality = Math.min(Math.max(rawQuality, 10), 100);
 		const clientId = req.body.clientId;
+		if (!clientId) {
+			return res.status(400).json({ success: false, error: "Missing clientId", failed: files.length });
+		}
 		const socket = io.sockets.sockets.get(clientId); // get the specific socket
 
-		const outputDir = path.join("output");
-		// create folder if it doesn't exist
-		if (!fs.existsSync(outputDir)) {
-			fs.mkdirSync(outputDir, { recursive: true });
-		}
+		const outputDir = path.join(OUTPUT_DIR, clientId);
+		// ensure directories exist
+		[OUTPUT_DIR, outputDir].forEach(dir => ensureDir(dir));
 
 		await Promise.all(
 			files.map(file => limitThreads(async () => {
@@ -141,7 +215,7 @@ app.post("/upload", upload.array("images"), async (req, res) => {
 
 					const fileResult = {
 						name: outputFilename,
-						url: `/output/${outputFilename}`,
+						url: `/output/${clientId}/${outputFilename}`,
 						size: stats.size,
 						oldSize: file.size
 					};

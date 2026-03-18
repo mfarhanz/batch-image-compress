@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Batch Image Compressor</title>
+</head>
+
+<body>
+    <script type="module" src="/src/main.js"></script>
+    <div id="app">
+
+
+        <h1>Batch Image Compressor</h1>
+
+        <p class="description">
+            Upload multiple images or an entire folder to automatically resize them, convert to WebP, and preview or
+            download the results.
+            GIFs and videos are not supported and will be skipped.
+        </p>
+
+        <div class="main-container">
+            <div class="left-panel">
+                <!-- Upload sections go here -->
+                <div class="upload-section">
+                    <label for="fileInput">Select individual image files:</label>
+                    <input type="file" id="fileInput" multiple />
+                    <button id="fileInputButton">Upload Files</button>
+                </div>
+
+                <div class="upload-section">
+                    <label for="folderInput">Or select a folder of images:</label>
+                    <input type="file" id="folderInput" webkitdirectory />
+                    <button id="folderInputButton">Upload Folder</button>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <h3>Settings</h3>
+                <div class="settings-item">
+                    <label for="maxSize">Max width/height (px):</label>
+                    <input type="number" id="maxSize" value="1024" min="1" max="8000">
+                </div>
+                <div class="settings-item">
+                    <label for="quality">Image quality (10-100): <span id="qualityValue">80</span></label>
+                    <input type="range" id="quality" value="80" min="10" max="100">
+                </div>
+            </div>
+        </div>
+
+        <hr>
+
+        <div id="results"></div>
+        <div id="progressBar"></div>
+        <div id="summary"></div>
+    </div>
+</body>
+
+</html>

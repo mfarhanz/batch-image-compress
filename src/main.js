@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import JSZip from "jszip";
 
 // const SIZE_LIMIT = 200000; // 200 KB
 const serverUrl = import.meta.env.VITE_SERVER_URL;
@@ -9,17 +10,41 @@ const folderInput = document.getElementById("folderInput");
 const fileInput = document.getElementById("fileInput");
 const progressBar = document.getElementById("progressBar");
 const summary = document.getElementById("summary");
+const downloadAll = document.getElementById("download-zip-btn");
+const downloadAllWrapper = document.getElementById("download-zip-wrapper");
+const zipProgressContainer = document.getElementById("zip-progress");
+const zipProgressBar = new ProgressBar.Circle(zipProgressContainer, {
+    strokeWidth: 6,
+    color: "#c7d2fe",
+    trailColor: "#e5e7eb",
+    trailWidth: 6,
+    easing: "easeInOut",
+    duration: 300,
+    text: {
+        autoStyleContainer: false
+    },
+    from: { color: "#c7d2fe" },
+    to: { color: "#c7d2fe" },
+    step: function (state, circle) {
+        const value = Math.round(circle.value() * 100);
+        circle.setText(value ? `${value}%` : "");
+    }
+});
+zipProgressBar.text.style.fontFamily = "monospace";
+zipProgressBar.text.style.fontSize = "13px";
+zipProgressBar.text.style.color = "#9dbfff";
+
 const socket = io(serverUrl);
 
 let completedFiles = 0; // for progress bar across all batches
 let totalFiles = 0;
+let fileBuffer = [];
 
 socket.on("connect", () => {
     console.log("Connected to server via WebSocket:", socket.id);
 });
 
 socket.on("file-processed", async (file) => {
-    console.log("Received processed file:", file);
     const el = createFileItem(file);
     resultsDiv.appendChild(el);
     window.scrollTo({
@@ -28,6 +53,7 @@ socket.on("file-processed", async (file) => {
     });
     // Update progress bar incrementally
     completedFiles++;
+    fileBuffer.push(file?.url);
     progressBar.style.width = Math.round((completedFiles / totalFiles) * 100) + "%";
     // tiny delay to let UI render smoothly (optional)
     await new Promise(r => setTimeout(r, 50));
@@ -45,22 +71,70 @@ qualitySlider.addEventListener("input", () => {
     qualityValue.textContent = qualitySlider.value;
 });
 
+downloadAll.addEventListener("click", async () => {
+    if (!fileBuffer.length) return alert("No files to download!");
+
+    zipProgressContainer.classList.add("show");
+    zipProgressBar.set(0);
+    downloadAll.disabled = true;
+    const total = fileBuffer.length;
+    let completed = 0;
+
+    const zip = new JSZip();
+    const folder = zip.folder("bulk-download");
+
+    // Fetch all files and add to zip
+    await Promise.all(fileBuffer.map(async (url, index) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const filename = url.substring(url.lastIndexOf("/") + 1);
+            folder.file(filename, blob);
+        } catch (err) {
+            console.error("Failed to fetch file:", url, err);
+        } finally {
+            completed++;
+            const percent = completed / total;
+            zipProgressBar.animate(percent); // smooth animation
+        }
+    }));
+
+    // Generate zip and trigger download
+    zip.generateAsync({ type: "blob" }).then((content) => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(content);
+        link.download = "files.zip";
+        link.click();
+        URL.revokeObjectURL(link.href);
+    });
+
+    zipProgressBar.animate(1);
+    // Hide after done
+    setTimeout(() => {
+        zipProgressContainer.classList.remove("show");
+        downloadAll.disabled = false;
+    }, 2000);
+});
+
 function clearUI() {
     resultsDiv.innerHTML = "";
     summary.style.display = "none";
-    progressBar.style.display = "none";
+    progressBar.style.width = "0%";      // reset
+    progressBar.style.backgroundColor = "";
+    downloadAllWrapper.style.display = "none";
 }
 
 function createFileItem(file) {
     const container = document.createElement("div");
+    const item = document.createElement("div");
+    item.className = "file-item";
 
-    const title = document.createElement("div");
-
-    // only on rror/corrupted/unsupported files
+    // only on error/corrupted/unsupported files
     if (file.error) {
-        title.textContent = `${file.name} - ${file.error}`;
-        title.style.color = "red";
-        container.appendChild(title);
+        item.textContent = `${file.name} - ${file.error}`;
+        item.style.fontWeight = "normal";
+        item.style.color = "red";
+        container.appendChild(item);
         return container;
     }
 
@@ -109,9 +183,8 @@ function createFileItem(file) {
     rightSide.appendChild(percentChangeSpan);
     rightSide.appendChild(downloadLink);
 
-    title.className = "file-item";
-    title.appendChild(nameSpan);   // LEFT
-    title.appendChild(rightSide);  // RIGHT
+    item.appendChild(nameSpan);   // LEFT
+    item.appendChild(rightSide);  // RIGHT
 
     const details = document.createElement("div");
     details.className = "details";
@@ -120,12 +193,12 @@ function createFileItem(file) {
     details.appendChild(img);
 
     // toggle behavior
-    title.onclick = () => {
+    item.onclick = () => {
         details.style.display =
             details.style.display === "none" ? "block" : "none";
     };
 
-    container.appendChild(title);
+    container.appendChild(item);
     container.appendChild(details);
     return container;
 }
@@ -152,14 +225,13 @@ export async function handleUpload(files) {
     if (!files.length) return;
 
     clearUI();
-    progressBar.style.width = "0%";      // reset
     progressBar.style.display = "block"; // show
 
     const batchSize = 50; // max files per request
     let failed = 0;
+    let skipped = 0;
     completedFiles = 0;
     totalFiles = files.length;
-    // let allFiles = []; // collect results from all batches
 
     // loop through batches
     for (let i = 0; i < files.length; i += batchSize) {
@@ -175,16 +247,27 @@ export async function handleUpload(files) {
         try {
             const res = await fetch(`${serverUrl}/upload`, { method: "POST", body: formData });
             const data = await res.json();
-            failed += data.failed;
-            if (!data.success) continue;
+            if (data?.skipped != null) {
+                skipped += data.skipped;
+                completedFiles -= skipped;
+            }
+            if (!data.success) {
+                if (data?.failed != null) {
+                    failed += data.failed;
+                    throw new Error(`Error processing file: ${data.error}`);
+                } else {
+                    failed += batch.length;
+                    throw new Error(`Batch upload failed: ${data.error}`);
+                }
+            } else failed += data.failed;
         } catch (err) {
-            console.error("Batch upload failed", err);
-            failed += batch.length;
+            console.error(err);
         }
     }
 
-    summary.textContent = `(Processed ${completedFiles}/${totalFiles} files • ${failed} failed)`;
+    summary.textContent = `(Processed ${completedFiles}/${totalFiles} files • ${failed} failed • ${skipped} skipped)`;
     summary.style.display = "block";
     // done processing all batches
-    progressBar.style.display = "none";
+    progressBar.style.backgroundColor = "#2ecc71";
+    downloadAllWrapper.style.display = "flex";
 }

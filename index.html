@@ -11,9 +11,8 @@
 
 <body>
     <script type="module" src="/src/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/progressbar.js"></script>
     <div id="app">
-
-
         <h1>Batch Image Compressor</h1>
 
         <p class="description">
@@ -56,7 +55,11 @@
         <div id="results"></div>
         <div id="progressBar"></div>
         <div id="summary"></div>
+        <div id="download-zip-wrapper">
+            <button id="download-zip-btn">Download All as ZIP
+                <div id="zip-progress"></div>
+            </button>
+        </div>
     </div>
 </body>
-
 </html>

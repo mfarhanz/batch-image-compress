@@ -11,6 +11,12 @@ const fileInputButton = document.getElementById("fileInputButton");
 const folderInputButton = document.getElementById("folderInputButton");
 const progressBar = document.getElementById("progressBar");
 const summary = document.getElementById("summary");
+const errorCard = document.getElementById("error-card");
+const errorMessage = document.getElementById("error-message");
+const errorInfo = document.getElementById("error-info");
+const errorList = document.getElementById("error-list");
+const errorArrow = document.getElementById("error-arrow");
+const errorHeader = document.getElementById("error-header");
 const downloadAll = document.getElementById("download-zip-btn");
 const downloadAllWrapper = document.getElementById("download-zip-wrapper");
 const zipProgressContainer = document.getElementById("zip-progress");
@@ -42,9 +48,10 @@ const MAX_BATCH_SIZE = 20;
 let completedFiles = 0; // for progress bar across all batches
 let totalFiles = 0;
 let fileBuffer = [];
+let failedFiles = [];
 
 socket.on("connect", () => {
-    console.log("Connected to server via WebSocket:", socket.id);
+    console.log("Connected to server with Socket ID:", socket.id);
 });
 
 socket.on("file-processed", async (data) => {
@@ -99,6 +106,24 @@ folderInputButton.addEventListener("click", () => {
     handleUpload(input.files);
 });
 
+errorHeader.onclick = () => {
+    if (errorList.classList.contains("expanded")) {
+        // collapse
+        errorInfo.style.display = "none";
+        errorList.style.maxHeight = "0px";
+        errorList.style.padding = "0 12px";
+        errorList.classList.remove("expanded");
+        errorArrow.textContent = "▼";
+    } else {
+        // expand dynamically to fit content
+        errorInfo.style.display = "block";
+        errorList.style.maxHeight = errorList.scrollHeight + "px";
+        errorList.style.padding = "8px 12px";
+        errorList.classList.add("expanded");
+        errorArrow.textContent = "▲";
+    }
+};
+
 downloadAll.addEventListener("click", async () => {
     if (!fileBuffer.length) return alert("No files to download!");
 
@@ -139,11 +164,14 @@ downloadAll.addEventListener("click", async () => {
 function clearBuffers() {
     fileBuffer.forEach(f => URL.revokeObjectURL(f.url));
     fileBuffer = [];
+    failedFiles = [];
 }
 
 function clearUI() {
     resultsDiv.innerHTML = "";
     summary.style.display = "none";
+    errorCard.style.display = "none";
+    errorList.innerHTML = "";
     progressBar.style.width = "0%";      // reset
     progressBar.style.backgroundColor = "";
     downloadAllWrapper.style.display = "none";
@@ -229,6 +257,43 @@ function createFileItem(file) {
     return container;
 }
 
+function showErrorCard(message, files, error = "") {
+    errorMessage.textContent = `${message} (${files.length})`;
+    errorList.innerHTML = "";
+
+    files.forEach(file => {
+        const item = document.createElement("div");
+        item.classList.add("error-list-item");
+
+        const nameEl = document.createElement("span");
+        nameEl.textContent = file.name;
+
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        const sizeEl = document.createElement("span");
+        sizeEl.textContent = `${sizeMB} MB`;
+
+        // If file > 100MB, make size red and add tooltip
+        if (file.size > 100 * 1024 * 1024) {
+            sizeEl.style.color = "#ff0000"; // red
+            item.title = "This file may not be processed because it exceeds 100MB";
+        }
+
+        item.appendChild(nameEl);
+        item.appendChild(sizeEl);
+        errorList.appendChild(item);
+    });
+
+    // Set info text
+    errorInfo.textContent = error ?
+        `The server could not process this batch of images due to the following reason: ${error}` : "";
+    errorInfo.style.display = "none";  // hidden initially
+
+    // show card
+    errorCard.style.display = "block";
+    errorList.classList.remove("expanded");
+    errorArrow.textContent = "▼";
+}
+
 const formatSize = (bytes) => {
     if (bytes > 1024 * 1024)
         return (bytes / (1024 * 1024)).toFixed(2) + " MB";
@@ -247,6 +312,7 @@ export async function handleUpload(files) {
     progressBar.style.display = "block"; // show
     progressBar.classList.add("progress-shimmer");
 
+    let errorMessage;
     let failed = 0;
     let skipped = 0;
     completedFiles = 0;
@@ -268,37 +334,47 @@ export async function handleUpload(files) {
             const data = await res.json();
             if (data?.skipped != null) {
                 skipped += data.skipped;
-                // completedFiles -= skipped;
             }
             if (!data.success) {
                 let err;
                 if (data?.failed != null) {
                     failed += data.failed;
-                    err = new Error(`Error processing files: ${data.error}`);
+                    err = new Error(`Error processing files. ${data.error}.`);
                 } else {
                     failed += batch.length;
-                    err = new Error(`Batch upload failed: ${data.error}`);
+                    err = new Error(`Batch upload failed. ${data.error}.`);
                 }
                 err.type = "server";
                 throw err;
             } else failed += data.failed;
         } catch (err) {
+            failedFiles.push(...batch);
+
             if (err.type === "server") {
                 console.error("Server error:", err.message);
+                errorMessage = err.message;
             } else {
                 failed += batch.length
                 console.error("Network/client error:", err.message);
+                errorMessage = err.message;
             }
         }
     }
 
-    summary.textContent = `(Processed ${completedFiles}/${totalFiles} files • ${failed} failed • ${skipped} skipped)`;
-    summary.style.display = "block";
-    // done processing all batches
-    progressBar.style.width = "100%";   // ensure 100 to show done processing
-    progressBar.classList.remove("progress-shimmer");
-    progressBar.style.backgroundColor = "#2ecc71";
-    downloadAllWrapper.style.display = "flex";
-    fileInputButton.disabled = false;
-    folderInputButton.disabled = false;
+    // short delay before updating UI to accomodate for any pending file-processed events
+    setTimeout(() => {
+        if (failedFiles.length) {
+            showErrorCard("Some files failed to process", [...failedFiles], errorMessage ?? null);
+        }
+
+        summary.textContent = `(Processed ${completedFiles}/${totalFiles} files • ${failed} failed • ${skipped} skipped)`;
+        summary.style.display = "block";
+        // done processing all batches
+        progressBar.style.width = "100%";   // ensure 100 to show done processing
+        progressBar.classList.remove("progress-shimmer");
+        progressBar.style.backgroundColor = "#2ecc71";
+        downloadAllWrapper.style.display = "flex";
+        fileInputButton.disabled = false;
+        folderInputButton.disabled = false;
+    }, 1000);
 }

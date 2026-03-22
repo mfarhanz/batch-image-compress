@@ -121,7 +121,7 @@ app.post("/upload", (req, res) => {
 			if (err instanceof multer.MulterError) {
 				const errorMap = {
 					LIMIT_FILE_SIZE: "One or more files exceed 100MB limit",
-					LIMIT_FILE_COUNT: "Too many files (max 300)",
+					LIMIT_FILE_COUNT: "Too many files (max 20)",
 				};
 
 				const message = errorMap[err.code] || err.message;

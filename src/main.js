@@ -1,7 +1,8 @@
-import { io } from "socket.io-client";
 import JSZip from "jszip";
+import pLimit from "p-limit";
+import { processImageSimple, processImageRefined, processImageStrict, processImageFrames } from "./processing";
 
-const serverUrl = import.meta.env.VITE_SERVER_URL;
+// const serverUrl = import.meta.env.VITE_SERVER_URL;
 const resultsDiv = document.getElementById("results");
 const qualitySlider = document.getElementById("quality");
 const qualityValue = document.getElementById("qualityValue");
@@ -9,6 +10,16 @@ const folderInput = document.getElementById("folderInput");
 const fileInput = document.getElementById("fileInput");
 const fileInputButton = document.getElementById("fileInputButton");
 const folderInputButton = document.getElementById("folderInputButton");
+const imageToggle = document.getElementById("toggleImageSettings");
+const sizeToggle = document.getElementById("toggleSizeLimit");
+const hqToggle = document.getElementById("hqToggle");
+const hqWarning = document.getElementById("hqWarning");
+const fsInfo = document.getElementById("fsInfo");
+const imageCard = document.getElementById("imageSettingsCard");
+const sizeCard = document.getElementById("sizeLimitCard");
+const sizeSlider = document.getElementById("maxFileSize");
+const sizeValue = document.getElementById("sizeValue");
+const statusBar = document.getElementById("statusBar");
 const progressBar = document.getElementById("progressBar");
 const summary = document.getElementById("summary");
 const errorCard = document.getElementById("error-card");
@@ -42,46 +53,22 @@ zipProgressBar.text.style.fontFamily = "monospace";
 zipProgressBar.text.style.fontSize = "13px";
 zipProgressBar.text.style.color = "#9dbfff";
 
-const socket = io(serverUrl);
 const MAX_BATCH_SIZE = 20;
+const MAX_FILE_BYTES = 100 * 1000 * 1000;
+const MAX_BATCH_BYTES = 300 * 1000 * 1000;
+const limitThreads = pLimit(navigator.hardwareConcurrency || 3);
 
 let completedFiles = 0; // for progress bar across all batches
 let totalFiles = 0;
 let fileBuffer = [];
 let failedFiles = [];
 
-socket.on("connect", () => {
-    console.log("Connected to server with Socket ID:", socket.id);
-});
+updateCards();
 
-socket.on("file-processed", async (data) => {
-    // Convert base64 buffer to Blob
-    let blobUrl = null;
-    if (data.buffer) {
-        const binary = Uint8Array.from(atob(data.buffer), c => c.charCodeAt(0));
-        const blob = new Blob([binary], { type: "image/webp" });
-        blobUrl = URL.createObjectURL(blob);
-
-        // Store blob for later download/all-download
-        fileBuffer.push({
-            name: data.name,
-            blob,
-            url: blobUrl
-        });
-        completedFiles++;
-    }
-
-    const el = createFileItem({ ...data, url: blobUrl });
-    resultsDiv.appendChild(el);
-    window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth"
-    });
-
-    // Update progress bar incrementally
-    progressBar.style.width = Math.round((completedFiles / totalFiles) * 100) + "%";
-    // tiny delay to let UI render smoothly (optional)
-    await new Promise(r => setTimeout(r, 50));
+imageToggle.addEventListener("change", () => updateCards(imageToggle));
+sizeToggle.addEventListener("change", () => {
+    updateCards(sizeToggle);
+    fsInfo.classList.toggle("hidden", !sizeToggle.checked);
 });
 
 folderInput.addEventListener("change", () => {
@@ -106,6 +93,10 @@ folderInputButton.addEventListener("click", () => {
     handleUpload(input.files);
 });
 
+hqToggle.addEventListener("change", () => {
+    hqWarning.classList.toggle("hidden", !hqToggle.checked);
+});
+
 errorHeader.onclick = () => {
     if (errorList.classList.contains("expanded")) {
         // collapse
@@ -123,6 +114,24 @@ errorHeader.onclick = () => {
         errorArrow.textContent = "▲";
     }
 };
+
+sizeSlider.addEventListener("input", () => {
+    const val = Number(sizeSlider.value);
+    let snapped;
+
+    if (val <= 1000) {
+        snapped = Math.round(val / 50) * 50;
+        sizeValue.textContent = snapped + " KB";
+    }
+    else {
+        if (val <= 3000) snapped = Math.round(val / 500) * 500;
+        else snapped = Math.round(val / 1000) * 1000;
+
+        sizeValue.textContent = (snapped / 1000).toFixed(2).replace(/\.?0+$/, "") + " MB";
+    }
+
+    sizeSlider.value = snapped;
+});
 
 downloadAll.addEventListener("click", async () => {
     if (!fileBuffer.length) return alert("No files to download!");
@@ -151,7 +160,6 @@ downloadAll.addEventListener("click", async () => {
     link.download = "files.zip";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    // URL.revokeObjectURL(url);
 
     zipProgressBar.animate(1);
     // Hide after done
@@ -160,6 +168,33 @@ downloadAll.addEventListener("click", async () => {
         downloadAll.disabled = false;
     }, 2000);
 });
+
+function setInputsDisabled(card, disabled) {
+    card.querySelectorAll("input").forEach(el => {
+        if (el.type !== "checkbox") {
+            el.disabled = disabled;
+        }
+    });
+}
+
+function setStatus(text) {
+    statusBar.textContent = text;
+}
+
+function updateCards(clickedToggle) {
+    if (!imageToggle.checked && !sizeToggle.checked) {
+        if (clickedToggle === imageToggle) {
+            sizeToggle.checked = true;
+        } else {
+            imageToggle.checked = true;
+        }
+    }
+
+    imageCard.classList.toggle("disabled", !imageToggle.checked);
+    sizeCard.classList.toggle("disabled", !sizeToggle.checked);
+    setInputsDisabled(imageCard, !imageToggle.checked);
+    setInputsDisabled(sizeCard, !sizeToggle.checked);
+}
 
 function clearBuffers() {
     fileBuffer.forEach(f => URL.revokeObjectURL(f.url));
@@ -174,6 +209,7 @@ function clearUI() {
     errorList.innerHTML = "";
     progressBar.style.width = "0%";      // reset
     progressBar.style.backgroundColor = "";
+    statusBar.classList.add("hidden");
     downloadAllWrapper.style.display = "none";
 }
 
@@ -302,6 +338,38 @@ const formatSize = (bytes) => {
     return bytes + " B";
 };
 
+const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+const isSkippable = (file) => {
+    return file.type.startsWith("video/");
+};
+
+async function onFileProcessed(data) {
+    let blobUrl = null;
+    if (data.blob) {
+        blobUrl = URL.createObjectURL(data.blob);
+        fileBuffer.push({
+            name: data.name,
+            blob: data.blob,
+            url: blobUrl
+        });
+
+        completedFiles++;
+    }
+
+    const el = createFileItem({ ...data, url: blobUrl });
+    resultsDiv.appendChild(el);
+
+    window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth"
+    });
+    // Update progress bar incrementally
+    progressBar.style.width = Math.round((completedFiles / totalFiles) * 100) + "%";
+    // tiny delay to let UI render smoothly
+    await new Promise(r => setTimeout(r, 50));
+}
+
 export async function handleUpload(files) {
     if (!files.length) return;
 
@@ -309,57 +377,154 @@ export async function handleUpload(files) {
     clearUI();
     fileInputButton.disabled = true;
     folderInputButton.disabled = true;
-    progressBar.style.display = "block"; // show
+    // progressBar.style.display = "block";
+    statusBar.classList.remove("hidden");
     progressBar.classList.add("progress-shimmer");
+    setStatus("processing");
 
     let errorMessage;
+    let maxDims = null;
+    let quality = null;
+    let maxSize = null;
     let failed = 0;
     let skipped = 0;
     completedFiles = 0;
     totalFiles = files.length;
 
-    // loop through batches
+    const totalBatches = Math.ceil(files.length / MAX_BATCH_SIZE);
+
+    // image settings
+    if (imageToggle.checked) {
+        const rawMaxDims = parseInt(document.getElementById("maxDims").value) || 1024;
+        const rawQuality = parseInt(document.getElementById("quality").value) || 80;
+        maxDims = clamp(rawMaxDims, 1, 8000);
+        quality = clamp(rawQuality, 10, 100);
+    }
+
+    // size settings
+    if (sizeToggle.checked) {
+        const rawMaxSize = parseInt(document.getElementById("maxFileSize").value) || 500;
+        maxSize = clamp(rawMaxSize, 50, 5000) * 1000; // slider is in KB, convert to bytes
+    }
+
     for (let i = 0; i < files.length; i += MAX_BATCH_SIZE) {
         const batch = Array.from(files).slice(i, i + MAX_BATCH_SIZE);
-        const formData = new FormData();
-        formData.append("clientId", socket.id);
-        batch.forEach(file => formData.append("images", file));
-
-        // add current settings
-        formData.append("maxSize", document.getElementById("maxSize").value);
-        formData.append("quality", document.getElementById("quality").value);
+        const batchSize = batch.reduce((sum, f) => sum + f.size, 0);
 
         try {
-            const res = await fetch(`${serverUrl}/upload`, { method: "POST", body: formData });
-            const data = await res.json();
-            if (data?.skipped != null) {
-                skipped += data.skipped;
-            }
-            if (!data.success) {
-                let err;
-                if (data?.failed != null) {
-                    failed += data.failed;
-                    err = new Error(`Error processing files. ${data.error}.`);
-                } else {
-                    failed += batch.length;
-                    err = new Error(`Batch upload failed. ${data.error}.`);
-                }
-                err.type = "server";
-                throw err;
-            } else failed += data.failed;
+            await Promise.all(
+                batch.map(file => limitThreads(async () => {
+                    // skip unsupported files
+                    if (isSkippable(file)) {
+                        skipped++;
+                        await onFileProcessed({
+                            name: file.name,
+                            error: "File not processed: Unsupported media type"
+                        });
+                        return;
+                    } else if (batchSize > MAX_BATCH_BYTES) {
+                        throw new Error(`Total batch size exceeded the max limit (${MAX_BATCH_BYTES/(1000 * 1000)}MB)`);
+                    }
+
+                    const baseName = file.name.replace(/\.[^.]+$/, "");
+                    const outputName = `${baseName}.webp`;
+                    setStatus(`processing ${file.name}`);
+
+                    let blob;
+
+                    try {
+                        if (file.size > MAX_FILE_BYTES) {
+                            throw new Error(`File too big to process (greater than ${MAX_FILE_BYTES / (1000 * 1000)}MB)`);
+                        }
+
+                        // only for gifs
+                        if (!hqToggle.checked) {
+                            if (file.type === "image/gif") {
+                                if (sizeToggle.checked) {
+                                    blob = await processImageFrames({
+                                        file,
+                                        maxSize,
+                                        maxDims,
+                                        quality,
+                                        onProgress: (m) => setStatus(m)
+                                    });
+                                } else {
+                                    blob = await processImageFrames({
+                                        file,
+                                        maxDims,
+                                        quality,
+                                        onProgress: (m) => setStatus(m)
+                                    });
+                                }
+                            }
+
+                            // if size contraint enabled...
+                            else if (sizeToggle.checked) {
+                                blob = await processImageStrict({
+                                    file,
+                                    maxSize,
+                                    maxDims,
+                                    quality,
+                                    onProgress: (m) => setStatus(m)
+                                });
+                            }
+
+                            // otherwise default to this
+                            else if (imageToggle.checked) {
+                                blob = await processImageSimple({
+                                    file,
+                                    maxDims,
+                                    quality,
+                                    onProgress: (m) => setStatus(m)
+                                });
+                            }
+
+                            // fallback (shouldn't happen really)
+                            else {
+                                throw new Error("No processing mode selected");
+                            }
+                        } else {
+                            blob = await processImageRefined({
+                                file,
+                                maxSize,
+                                maxDims,
+                                quality,
+                                onProgress: (m) => setStatus(m)
+                            });
+                        }
+
+                        if (!blob) {
+                            throw new Error("Could not process file with current parameters");
+                        } else {
+                            await onFileProcessed({
+                                name: outputName,
+                                originalName: file.name,
+                                blob,
+                                size: blob.size,
+                                oldSize: file.size
+                            });
+                        }
+                    } catch (e) {
+                        failed++;
+                        await onFileProcessed({
+                            name: file.name,
+                            error: e.message ?? "Error processing image"
+                        });
+                    }
+                }))
+            );
+
         } catch (err) {
             failedFiles.push(...batch);
-
-            if (err.type === "server") {
-                console.error("Server error:", err.message);
-                errorMessage = err.message;
-            } else {
-                failed += batch.length
-                console.error("Network/client error:", err.message);
-                errorMessage = err.message;
-            }
+            failed += batch.length
+            errorMessage = err.message;
+            console.error(errorMessage);
+        } finally {
+            setStatus(`processed batch ${Math.floor(i / MAX_BATCH_SIZE) + 1}/${totalBatches}`)
         }
     }
+
+    setStatus("done");
 
     // short delay before updating UI to accomodate for any pending file-processed events
     setTimeout(() => {
@@ -373,6 +538,7 @@ export async function handleUpload(files) {
         progressBar.style.width = "100%";   // ensure 100 to show done processing
         progressBar.classList.remove("progress-shimmer");
         progressBar.style.backgroundColor = "#2ecc71";
+        statusBar.classList.add("hidden");
         downloadAllWrapper.style.display = "flex";
         fileInputButton.disabled = false;
         folderInputButton.disabled = false;

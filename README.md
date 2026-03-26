@@ -1,84 +1,24 @@
-# Batch Image Compressor
+# [Webply](https://webply.pages.dev) (Batch Image Compressor)
 
-A small tool that can be run locally to upload multiple images (or entire folders), efficiently resize them by convert to WebP and adjusting image quality/dimensions, and download the results.
+[Webply](https://webply.pages.dev) is a web tool for compressing images by converting them to WebP directly in the browser.
 
 ## Features
 
-- Upload individual files or full folders
-- Batch processing with size and quality controls
-- Converts images to WebP
-- Skips unsupported formats (GIFs, videos)
-- Real-time progress updates
-- Preview and download processed images
-
-## Tech Stack
-
-- Frontend: Vite (vanilla JS)
-- Backend: Node.js + Express
-- Image processing: Sharp
-- File uploads: Multer
-- Realtime updates: Socket.IO
-
-## Getting Started
-
-### 1. Install dependencies
-
-```bash
-npm install
-````
-
-### 2. Set up environment variables
-
-Create a `.env` file:
-
-```env
-VITE_SERVER_URL=http://localhost:3000
-VITE_CLIENT_URL=http://localhost:5173
-VITE_UPLOADS_DIR=uploads
-VITE_OUTPUT_DIR=output
-```
-
-### 3. Run the app
-
-Start the backend:
-
-```bash
-npm run serve
-```
-
-Start the frontend:
-
-```bash
-npm run dev
-```
-
-Then open the Vite URL (usually `http://localhost:5173`).
-
-## Project Structure
-
-```
-├── public/        # static assets
-├── src/           # frontend + server code
-├── uploads/       # temporary uploaded files
-├── output/        # processed images
-├── server.js
-```
+* Upload multiple images, gifs or entire folders
+* Batch processing with adjustable max size and quality settings
+* Converts images to WebP
+* Skips unsupported files
+* Progress tracking during processing
+* Preview and download compressed images
 
 ## Notes
 
-- Uploaded and processed files are stored locally and cleared on server shutdown.
-- Large uploads are processed in batches to avoid memory issues.
-- Progress updates are sent in real time using WebSockets.
+* All processing happens in your browser. No files leave your device.
+* Large batches are processed in smaller groups to avoid memory issues.
+* Some formats such as GIFs may not compress reliably and can exceed the target size.
+* Compressing images with a very small target size while allowing large maximum dimensions may not always work.
 
 ## Limitations
 
-- Not optimized for production deployment yet
-- Uses local file storage (not cloud)
-- No authentication or user separation
-
-## Future Improvements
-
-- Cloud storage (S3 / Cloudflare R2)
-- Drag-and-drop UI
-- Better error handling and retry logic
-- Deployable backend setup
+* Processing speed depends on the user's device.
+* Very large images or batches may take longer to complete - use the stop button to halt processing if needed.

@@ -26,13 +26,13 @@
                 <!-- Upload sections go here -->
                 <div class="upload-section">
                     <label for="fileInput">Select individual image files:</label>
-                    <input type="file" id="fileInput" multiple />
+                    <input type="file" id="fileInput" accept="image/*,.gif" multiple />
                     <button id="fileInputButton">Upload Files</button>
                 </div>
 
                 <div class="upload-section">
                     <label for="folderInput">Or select a folder of images:</label>
-                    <input type="file" id="folderInput" webkitdirectory />
+                    <input type="file" id="folderInput" webkitdirectory accept="image/*,.gif" />
                     <button id="folderInputButton">Upload Folder</button>
                 </div>
             </div>
@@ -136,6 +136,10 @@
                 <div id="zip-progress"></div>
             </button>
         </div>
+        <button id="stop-btn" class="hidden">
+            <span class="stop-text">⏹</span>
+            <span class="stop-spinner"></span>
+        </button>
     </div>
 </body>
 

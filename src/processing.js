@@ -10,7 +10,7 @@ const picaInstance = pica({ features: ['js', 'wasm', 'ww'] });
 const ffmpeg = new FFmpeg();
 
 // create a pool of canvases matching hardware concurrency
-const poolSize = navigator.hardwareConcurrency || 3;
+const poolSize = Math.max(1, Math.min(navigator.hardwareConcurrency, 8));   // more than plimit's concurrency count, just to be safe
 const canvasPool = Array.from({ length: poolSize }, () => {
     return typeof OffscreenCanvas !== "undefined"
         ? new OffscreenCanvas(1, 1)
@@ -37,7 +37,6 @@ export async function processImageSimple({ file, maxDims, quality, onProgress = 
         canvas.width = width;
         canvas.height = height;
 
-        onProgress("redrawing image");
         const ctx = canvas.getContext("2d", {
             alpha: supportsAlpha,
             desynchronized: true
@@ -47,8 +46,8 @@ export async function processImageSimple({ file, maxDims, quality, onProgress = 
         ctx.drawImage(bitmap, 0, 0, width, height);
 
         const targetQuality = (quality && quality > 0 && quality <= 100) ? quality / 100 : 0.8;
+        onProgress(`processing ${file.name}`);
 
-        onProgress("encoding blob file");
         const blob = await (canvas.convertToBlob
             ? canvas.convertToBlob({ type: "image/webp", quality: targetQuality })
             : new Promise(resolve => canvas.toBlob(resolve, "image/webp", targetQuality))
@@ -56,7 +55,7 @@ export async function processImageSimple({ file, maxDims, quality, onProgress = 
 
         return blob;
     } catch (err) {
-        console.log(err);
+        console.error(err);
         throw err;
     } finally {
         bitmap.close();
@@ -75,7 +74,7 @@ export async function processImageStrict({ file, maxSize, maxDims = undefined, q
         useWebWorker: true,
         fileType: 'image/webp',
         preserveExif: false,
-        onProgress: (percent) => onProgress(`compressing image... ${percent}%`)
+        onProgress: (percent) => onProgress(`compressing ${file.name}... ${percent}%`)
     };
 
     try {
@@ -102,7 +101,6 @@ export async function processImageRefined({ file, maxSize = undefined, maxDims =
         let size = (maxSize && maxSize > 5000) ? maxSize : undefined;
         let targetCanvas = new OffscreenCanvas(width, height);
 
-        onProgress("resizing image");
         await picaInstance.resize(bitmap, targetCanvas, {
             unsharpAmount: 80,
             unsharpRadius: 0.6,
@@ -127,7 +125,7 @@ export async function processImageRefined({ file, maxSize = undefined, maxDims =
                 quality: mid
             });
 
-            onProgress(`compressing file, iteration ${i + 1}/${iterations}`);
+            onProgress(`compressing ${file.name}, iteration ${i + 1}/${iterations}`);
 
             if (!size || size <= 0) {
                 bestBlob = blob;
@@ -185,11 +183,10 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
     if (!size) {    // if no size limit, force the mid to be equal to the target quality
         low = quality;
         high = quality;
-        onProgress('no size specified for gif, iterations set to 1');
     }
 
     ffmpeg.on('progress', ({ progress }) =>
-        onProgress(`processing gif, iteration ${currentIteration}/${iterations}: ${Math.round(progress * 100)}%`)
+        onProgress(`processing ${file.name}, iteration ${currentIteration}/${iterations}: ${Math.round(progress * 100)}%`)
     );
 
     try {
@@ -199,7 +196,6 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
             const mid = Math.floor((low + high) / 2);
             currentIteration = i + 1;
 
-            // onProgress(`processing gif, iteration ${i}/${iterations}`);
             await ffmpeg.exec([
                 '-i', inName,
                 '-vf', `scale='min(${maxDims},iw)':-1:force_original_aspect_ratio=decrease`,

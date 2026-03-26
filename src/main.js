@@ -28,6 +28,7 @@ const errorInfo = document.getElementById("error-info");
 const errorList = document.getElementById("error-list");
 const errorArrow = document.getElementById("error-arrow");
 const errorHeader = document.getElementById("error-header");
+const stopButton = document.getElementById("stop-btn");
 const downloadAll = document.getElementById("download-zip-btn");
 const downloadAllWrapper = document.getElementById("download-zip-wrapper");
 const zipProgressContainer = document.getElementById("zip-progress");
@@ -56,12 +57,13 @@ zipProgressBar.text.style.color = "#9dbfff";
 const MAX_BATCH_SIZE = 20;
 const MAX_FILE_BYTES = 100 * 1000 * 1000;
 const MAX_BATCH_BYTES = 300 * 1000 * 1000;
-const limitThreads = pLimit(navigator.hardwareConcurrency || 3);
+const limitThreads = pLimit(Math.max(1, Math.min(navigator.hardwareConcurrency, 5)));   // 5 parallel threads is enough
 
 let completedFiles = 0; // for progress bar across all batches
 let totalFiles = 0;
 let fileBuffer = [];
 let failedFiles = [];
+let cancelProcessing = false;
 
 updateCards();
 
@@ -131,6 +133,12 @@ sizeSlider.addEventListener("input", () => {
     }
 
     sizeSlider.value = snapped;
+});
+
+stopButton.addEventListener("click", () => {
+    if (cancelProcessing) return;
+    cancelProcessing = true;
+    stopButton.classList.add("loading");
 });
 
 downloadAll.addEventListener("click", async () => {
@@ -341,7 +349,7 @@ const formatSize = (bytes) => {
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 const isSkippable = (file) => {
-    return file.type.startsWith("video/");
+    return !file.type.startsWith("image/");
 };
 
 async function onFileProcessed(data) {
@@ -360,14 +368,18 @@ async function onFileProcessed(data) {
     const el = createFileItem({ ...data, url: blobUrl });
     resultsDiv.appendChild(el);
 
-    window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth"
+    // to ensure the DOM update doesn't fight with the transition animation
+    requestAnimationFrame(() => {
+        const percentage = Math.round((completedFiles / totalFiles) * 100);
+        progressBar.style.width = percentage + "%";
+
+        window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth"
+        });
     });
-    // Update progress bar incrementally
-    progressBar.style.width = Math.round((completedFiles / totalFiles) * 100) + "%";
-    // tiny delay to let UI render smoothly
-    await new Promise(r => setTimeout(r, 50));
+    // tiny delay to let UI render transitions smoothly
+    await new Promise(resolve => setTimeout(resolve, 0));
 }
 
 export async function handleUpload(files) {
@@ -375,9 +387,12 @@ export async function handleUpload(files) {
 
     clearBuffers();
     clearUI();
+    cancelProcessing = false;
     fileInputButton.disabled = true;
     folderInputButton.disabled = true;
     // progressBar.style.display = "block";
+    stopButton.classList.remove("hidden");
+    stopButton.classList.remove("loading");
     statusBar.classList.remove("hidden");
     progressBar.classList.add("progress-shimmer");
     setStatus("processing");
@@ -390,8 +405,6 @@ export async function handleUpload(files) {
     let skipped = 0;
     completedFiles = 0;
     totalFiles = files.length;
-
-    const totalBatches = Math.ceil(files.length / MAX_BATCH_SIZE);
 
     // image settings
     if (imageToggle.checked) {
@@ -407,60 +420,85 @@ export async function handleUpload(files) {
         maxSize = clamp(rawMaxSize, 50, 5000) * 1000; // slider is in KB, convert to bytes
     }
 
-    for (let i = 0; i < files.length; i += MAX_BATCH_SIZE) {
-        const batch = Array.from(files).slice(i, i + MAX_BATCH_SIZE);
-        const batchSize = batch.reduce((sum, f) => sum + f.size, 0);
+    const allFiles = Array.from(files);
+    const gifFiles = allFiles.filter(f => f.type === "image/gif");
+    const imageFiles = allFiles.filter(f => f.type !== "image/gif");
 
-        try {
-            await Promise.all(
-                batch.map(file => limitThreads(async () => {
-                    // skip unsupported files
-                    if (isSkippable(file)) {
-                        skipped++;
-                        await onFileProcessed({
-                            name: file.name,
-                            error: "File not processed: Unsupported media type"
-                        });
-                        return;
-                    } else if (batchSize > MAX_BATCH_BYTES) {
-                        throw new Error(`Total batch size exceeded the max limit (${MAX_BATCH_BYTES/(1000 * 1000)}MB)`);
-                    }
+    if (imageFiles.length > 0) {
+        setStatus("processing image files first");
+        const filesArray = Array.from(imageFiles);
 
-                    const baseName = file.name.replace(/\.[^.]+$/, "");
-                    const outputName = `${baseName}.webp`;
-                    setStatus(`processing ${file.name}`);
+        for (let i = 0; i < imageFiles.length; i += MAX_BATCH_SIZE) {
+            if (cancelProcessing) {
+                skipped += imageFiles.length - i;
+                setStatus("stopped processing");
+                break;
+            }
 
-                    let blob;
+            const batch = filesArray.slice(i, i + MAX_BATCH_SIZE);
+            const batchSize = batch.reduce((sum, f) => sum + f.size, 0);
 
-                    try {
-                        if (file.size > MAX_FILE_BYTES) {
-                            throw new Error(`File too big to process (greater than ${MAX_FILE_BYTES / (1000 * 1000)}MB)`);
+            try {
+                await Promise.all(
+                    batch.map(file => limitThreads(async () => {
+                        if (cancelProcessing) {
+                            skipped++;
+                            return;
                         }
 
-                        // only for gifs
-                        if (!hqToggle.checked) {
-                            if (file.type === "image/gif") {
+                        // skip unsupported files
+                        if (isSkippable(file)) {
+                            skipped++;
+                            await onFileProcessed({
+                                name: file.name,
+                                error: "File not processed: Unsupported media type"
+                            });
+                            return;
+                        } else if (batchSize > MAX_BATCH_BYTES) {
+                            throw new Error(`Total batch size exceeded the max limit (${MAX_BATCH_BYTES / (1000 * 1000)}MB)`);
+                        }
+
+                        const baseName = file.name.replace(/\.[^.]+$/, "");
+                        const outputName = `${baseName}.webp`;
+
+                        let blob;
+
+                        try {
+                            if (file.size > MAX_FILE_BYTES) {
+                                throw new Error(`Image too big to process (greater than ${MAX_FILE_BYTES / (1000 * 1000)}MB)`);
+                            }
+
+                            if (!hqToggle.checked) {
+                                // if size contraint enabled...
                                 if (sizeToggle.checked) {
-                                    blob = await processImageFrames({
+                                    blob = await processImageStrict({
                                         file,
                                         maxSize,
                                         maxDims,
                                         quality,
                                         onProgress: (m) => setStatus(m)
                                     });
-                                } else {
-                                    blob = await processImageFrames({
+                                }
+
+                                // otherwise default to this
+                                else if (imageToggle.checked) {
+                                    blob = await processImageSimple({
                                         file,
                                         maxDims,
                                         quality,
                                         onProgress: (m) => setStatus(m)
                                     });
                                 }
+
+                                // fallback (shouldn't happen really)
+                                else {
+                                    throw new Error("No processing mode selected");
+                                }
                             }
 
-                            // if size contraint enabled...
-                            else if (sizeToggle.checked) {
-                                blob = await processImageStrict({
+                            else {
+                                // high quality compressing
+                                blob = await processImageRefined({
                                     file,
                                     maxSize,
                                     maxDims,
@@ -469,62 +507,99 @@ export async function handleUpload(files) {
                                 });
                             }
 
-                            // otherwise default to this
-                            else if (imageToggle.checked) {
-                                blob = await processImageSimple({
-                                    file,
-                                    maxDims,
-                                    quality,
-                                    onProgress: (m) => setStatus(m)
+                            if (!blob) {
+                                throw new Error("Could not process file with current parameters");
+                            } else {
+                                await onFileProcessed({
+                                    name: outputName,
+                                    originalName: file.name,
+                                    blob,
+                                    size: blob.size,
+                                    oldSize: file.size
                                 });
                             }
-
-                            // fallback (shouldn't happen really)
-                            else {
-                                throw new Error("No processing mode selected");
-                            }
-                        } else {
-                            blob = await processImageRefined({
-                                file,
-                                maxSize,
-                                maxDims,
-                                quality,
-                                onProgress: (m) => setStatus(m)
-                            });
-                        }
-
-                        if (!blob) {
-                            throw new Error("Could not process file with current parameters");
-                        } else {
+                        } catch (e) {
+                            failed++;
                             await onFileProcessed({
-                                name: outputName,
-                                originalName: file.name,
-                                blob,
-                                size: blob.size,
-                                oldSize: file.size
+                                name: file.name,
+                                error: e.message ?? "Error processing image"
                             });
                         }
-                    } catch (e) {
-                        failed++;
-                        await onFileProcessed({
-                            name: file.name,
-                            error: e.message ?? "Error processing image"
-                        });
-                    }
-                }))
-            );
+                    }))
+                );
 
-        } catch (err) {
-            failedFiles.push(...batch);
-            failed += batch.length
-            errorMessage = err.message;
-            console.error(errorMessage);
-        } finally {
-            setStatus(`processed batch ${Math.floor(i / MAX_BATCH_SIZE) + 1}/${totalBatches}`)
+            } catch (err) {
+                failedFiles.push(...batch);
+                failed += batch.length
+                errorMessage = err.message;
+                console.error(errorMessage);
+            }
         }
     }
 
-    setStatus("done");
+    if (gifFiles.length > 0) {
+        setStatus("processing gif files now");
+        let gi = 0;
+        for (const file of gifFiles) {
+            if (cancelProcessing) {
+                skipped += gifFiles.length - gi;
+                setStatus("stopped processing");
+                break;
+            }
+
+            const baseName = file.name.replace(/\.[^.]+$/, "");
+            const outputName = `${baseName}.webp`;
+
+            let blob;
+
+            try {
+                if (file.size > MAX_FILE_BYTES) {
+                    throw new Error(`GIF too big to process (greater than ${MAX_FILE_BYTES / (1000 * 1000)}MB)`);
+                }
+
+                if (sizeToggle.checked) {
+                    blob = await processImageFrames({
+                        file,
+                        maxSize,
+                        maxDims,
+                        quality,
+                        onProgress: (m) => setStatus(m)
+                    });
+                }
+
+                else {
+                    blob = await processImageFrames({
+                        file,
+                        maxDims,
+                        quality,
+                        onProgress: (m) => setStatus(m)
+                    });
+                }
+
+                if (!blob) {
+                    throw new Error("Could not process file with current parameters");
+                } else {
+                    await onFileProcessed({
+                        name: outputName,
+                        originalName: file.name,
+                        blob,
+                        size: blob.size,
+                        oldSize: file.size
+                    });
+                }
+            } catch (e) {
+                failed++;
+                await onFileProcessed({
+                    name: file.name,
+                    error: e.message ?? "Error processing GIF"
+                });
+            } finally {
+                gi++;
+            }
+        }
+    }
+
+    if (!cancelProcessing) setStatus("done");
 
     // short delay before updating UI to accomodate for any pending file-processed events
     setTimeout(() => {
@@ -539,8 +614,11 @@ export async function handleUpload(files) {
         progressBar.classList.remove("progress-shimmer");
         progressBar.style.backgroundColor = "#2ecc71";
         statusBar.classList.add("hidden");
+        stopButton.classList.add("hidden");
+        stopButton.classList.remove("loading");
         downloadAllWrapper.style.display = "flex";
         fileInputButton.disabled = false;
         folderInputButton.disabled = false;
+        cancelProcessing = false;
     }, 1000);
 }

@@ -619,3 +619,67 @@ hr {
 #error-list div.error-list-item span {
     flex-shrink: 0;
 }
+
+#stop-btn {
+    position: fixed;
+    bottom: 26px;
+    right: 20px;
+    padding: 12px 17px;
+    font-size: 20px;
+    font-weight: 600;
+    border: none;
+    border-radius: 999px;
+    color: white;
+    background: #ff5f6cbc;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10000;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.25s ease;
+}
+
+#stop-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(0,0,0,0.35);
+}
+
+#stop-btn:active {
+    transform: translateY(0);
+}
+
+#stop-btn.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* spinner */
+
+.stop-spinner {
+    width: 17px;
+    height: 17px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    display: none;
+    animation: spin 0.8s linear infinite;
+}
+
+#stop-btn.loading {
+    padding: 15px 16px;
+}
+
+#stop-btn.loading .stop-text {
+    display: none;
+}
+
+#stop-btn.loading .stop-spinner {
+    display: block;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

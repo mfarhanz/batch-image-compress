@@ -254,19 +254,25 @@ function createFileItem(file) {
     nameSpan.textContent = file.name;
 
     // RIGHT SIDE CONTAINER
+
     const rightSide = document.createElement("div");
     rightSide.className = "file-meta";
     // original size
+    const sizeContainer = document.createElement("div");
+    sizeContainer.className = "size-container";
     const oldSizeSpan = document.createElement("span");
     oldSizeSpan.textContent = formatSize(file.oldSize);
     oldSizeSpan.className = "size";
-    // arrow separator (optional but nice)
+    // arrow separator
     const arrow = document.createElement("span");
     arrow.textContent = "→";
     // new size
     const sizeSpan = document.createElement("span");
     sizeSpan.textContent = formatSize(file.size);
     sizeSpan.className = "size";
+    sizeContainer.appendChild(oldSizeSpan);
+    sizeContainer.appendChild(arrow);
+    sizeContainer.appendChild(sizeSpan);
 
     // percent change
     const percentSaved = Math.round(((file.oldSize - file.size) / file.oldSize) * 100);
@@ -298,9 +304,8 @@ function createFileItem(file) {
     downloadLink.appendChild(label);
 
     // append RIGHT SIDE in order
-    rightSide.appendChild(oldSizeSpan);
-    rightSide.appendChild(arrow);
-    rightSide.appendChild(sizeSpan);
+    
+    rightSide.appendChild(sizeContainer);
     rightSide.appendChild(percentChangeSpan);
     rightSide.appendChild(downloadLink);
 

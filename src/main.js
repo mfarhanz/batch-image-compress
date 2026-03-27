@@ -1,5 +1,8 @@
 import JSZip from "jszip";
 import pLimit from "p-limit";
+import moonSVG from './icons/moon.svg?raw';
+import sunSVG from './icons/sun.svg?raw';
+import downloadSVG from './icons/download.svg?raw';
 import { processImageSimple, processImageRefined, processImageStrict, processImageFrames } from "./processing";
 
 // const serverUrl = import.meta.env.VITE_SERVER_URL;
@@ -10,6 +13,7 @@ const folderInput = document.getElementById("folderInput");
 const fileInput = document.getElementById("fileInput");
 const fileInputButton = document.getElementById("fileInputButton");
 const folderInputButton = document.getElementById("folderInputButton");
+const themeToggle = document.getElementById("themeToggle");
 const imageToggle = document.getElementById("toggleImageSettings");
 const sizeToggle = document.getElementById("toggleSizeLimit");
 const hqToggle = document.getElementById("hqToggle");
@@ -54,6 +58,9 @@ zipProgressBar.text.style.fontFamily = "monospace";
 zipProgressBar.text.style.fontSize = "13px";
 zipProgressBar.text.style.color = "#9dbfff";
 
+// Set initial icon
+themeToggle.innerHTML = moonSVG;
+
 const MAX_BATCH_SIZE = 20;
 const MAX_FILE_BYTES = 100 * 1000 * 1000;
 const MAX_BATCH_BYTES = 300 * 1000 * 1000;
@@ -64,6 +71,7 @@ let totalFiles = 0;
 let fileBuffer = [];
 let failedFiles = [];
 let cancelProcessing = false;
+let darkMode = false;
 
 updateCards();
 
@@ -71,6 +79,12 @@ imageToggle.addEventListener("change", () => updateCards(imageToggle));
 sizeToggle.addEventListener("change", () => {
     updateCards(sizeToggle);
     fsInfo.classList.toggle("hidden", !sizeToggle.checked);
+});
+
+themeToggle.addEventListener('click', () => {
+    darkMode = !darkMode;
+    document.body.classList.toggle('dark', darkMode);
+    themeToggle.innerHTML = darkMode ? sunSVG : moonSVG;
 });
 
 folderInput.addEventListener("change", () => {
@@ -225,12 +239,12 @@ function createFileItem(file) {
     const container = document.createElement("div");
     const item = document.createElement("div");
     item.className = "file-item";
+    container.className = "file-container";
 
     // only on error/corrupted/unsupported files
     if (file.error) {
         item.textContent = `${file.name} - ${file.error}`;
-        item.style.fontWeight = "normal";
-        item.style.color = "red";
+        item.className = "file-error";
         container.appendChild(item);
         return container;
     }
@@ -270,9 +284,18 @@ function createFileItem(file) {
     const downloadLink = document.createElement("a");
     downloadLink.href = file.url;
     downloadLink.download = file.name || "image.webp";
-    downloadLink.textContent = "Download";
     downloadLink.className = "download-link";
     downloadLink.onclick = (e) => e.stopPropagation();
+    // download icon (mobile)
+    const icon = document.createElement("div");
+    icon.innerHTML = downloadSVG;
+    icon.className = "download-icon";
+    // download label (pc)
+    const label = document.createElement("span");
+    label.textContent = "Download";
+    label.className = "download-text";
+    downloadLink.appendChild(icon);
+    downloadLink.appendChild(label);
 
     // append RIGHT SIDE in order
     rightSide.appendChild(oldSizeSpan);

@@ -3,21 +3,68 @@
 
 <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="stylesheet" href="/src/style.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Batch Image Compressor</title>
+    <title>Webply - Compress Images to WebP</title>
+    <meta name="description"
+        content="Webply is a web tool for compressing images by converting them to WebP directly in the browser.">
+    <meta name="keywords"
+        content="image compressor, webp, webp converter, batch image compressor, convert images to webp, image optimizer">
+    <meta name="author" content="Farhan Zia">
+    <link rel="canonical" href="https://webply.pages.dev/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content="Webply - Compress Images to WebP">
+    <meta property="og:description"
+        content="Webply is a web tool for compressing images by converting them to WebP directly in the browser.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://webply.pages.dev/">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="WebPly - Compress Images to WebP">
+    <meta name="twitter:description" content="Compress images by converting them to WebP directly in your browser.">
+    <link rel="stylesheet" href="/src/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Webply",
+        "url": "https://webply.pages.dev/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any",
+        "description": "A web tool that compresses images by converting them to WebP directly in the browser.",
+        "author": {
+            "@type": "Person",
+            "name": "Farhan Zia",
+            "url": "https://mfarhanz.dev",
+            "sameAs": [
+                "https://mfarhanz.dev", "https://mfarhanz.pages.dev"
+            ]
+        }
+    }
+    </script>
 </head>
 
 <body>
     <script type="module" src="/src/main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/progressbar.js"></script>
+    <nav class="navbar">
+        <div class="nav-inner">
+            <div class="logo">WebPly</div>
+
+            <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
+                <!-- SVG icon will be inserted here dynamically -->
+            </button>
+        </div>
+    </nav>
     <div id="app">
-        <h1>Batch Image Compressor</h1>
+        <h2>Batch Image Compressor to WebP</h2>
 
         <p class="description">
-            Upload multiple images or an entire folder to automatically resize them, convert to WebP, and preview or
-            download the results.
+            Compress multiple images at once by converting them to
+            <a target="_blank" rel="noopener noreferrer" class="link"
+                href="https://developers.google.com/speed/webp#:~:text=WebP%20lossless%20images,GIF%20and%20APNG.">WebP</a>
+            directly in your browser.<br>
             Supported formats: PNG, JPG, JPEG, BMP, TIFF, GIF, AVIF.
         </p>
 
@@ -30,7 +77,7 @@
                     <button id="fileInputButton">Upload Files</button>
                 </div>
 
-                <div class="upload-section">
+                <div id="folder-upload" class="upload-section">
                     <label for="folderInput">Or select a folder of images:</label>
                     <input type="file" id="folderInput" webkitdirectory accept="image/*,.gif" />
                     <button id="folderInputButton">Upload Folder</button>
@@ -38,8 +85,6 @@
             </div>
 
             <div class="right-panel">
-                <h3>Settings</h3>
-
                 <!-- Image Settings (enabled by default) -->
                 <div class="settings-card enabled" id="imageSettingsCard">
                     <div class="settings-header">

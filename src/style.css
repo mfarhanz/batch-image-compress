@@ -334,7 +334,7 @@ p.description {
     font-weight: 600;
     letter-spacing: 0.3px;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 10px var((var(--upload-btn-shadow)));
+    box-shadow: 0 4px 10px var(--upload-btn-shadow);
 }
 
 .upload-section button:hover {

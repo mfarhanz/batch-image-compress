@@ -438,14 +438,14 @@ export async function handleUpload(files) {
     if (imageToggle.checked) {
         const rawMaxDims = parseInt(document.getElementById("maxDims").value) || 1024;
         const rawQuality = parseInt(document.getElementById("quality").value) || 80;
-        maxDims = clamp(rawMaxDims, 1, 8000);
-        quality = clamp(rawQuality, 10, 100);
+        maxDims = clamp(rawMaxDims, 10, 8000);
+        quality = clamp(rawQuality, 1, 100);
     }
 
     // size settings
     if (sizeToggle.checked) {
         const rawMaxSize = parseInt(document.getElementById("maxFileSize").value) || 500;
-        maxSize = clamp(rawMaxSize, 50, 5000) * 1000; // slider is in KB, convert to bytes
+        maxSize = clamp(rawMaxSize, 5, 5000) * 1000; // slider is in KB, convert to bytes
     }
 
     const allFiles = Array.from(files);

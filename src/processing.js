@@ -66,7 +66,7 @@ export async function processImageSimple({ file, maxDims, quality, onProgress = 
 }
 
 export async function processImageStrict({ file, maxSize, maxDims = undefined, quality = 80, onProgress = () => { } }) {
-    const targetSizeMB = (maxSize && maxSize > 0) ? maxSize / (1024 * 1024) : 10;
+    const targetSizeMB = (maxSize && maxSize > 0) ? maxSize / (1024 * 1024) : 4;
     const options = {
         maxSizeMB: targetSizeMB,
         maxWidthOrHeight: maxDims ?? undefined,
@@ -86,7 +86,7 @@ export async function processImageStrict({ file, maxSize, maxDims = undefined, q
     }
 }
 
-export async function processImageRefined({ file, maxSize = undefined, maxDims = undefined, quality = 85, onProgress = () => { } }) {
+export async function processImageRefined({ file, maxSize = undefined, maxDims = undefined, quality = 100, onProgress = () => { } }) {
     let bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
 
     try {
@@ -108,8 +108,8 @@ export async function processImageRefined({ file, maxSize = undefined, maxDims =
         });
 
         // binary search to ensure image within maxSize, using quality param
-        const targetQuality = (quality && quality > 0) ? quality / 100 : 0.85;
-        let low = 0.05;
+        const targetQuality = (quality && quality > 0) ? quality / 100 : 1.0;
+        let low = 0.0;
         let high = targetQuality;
         let bestBlob = null;
         const iterations = size ? 6 : 1;
@@ -124,7 +124,7 @@ export async function processImageRefined({ file, maxSize = undefined, maxDims =
                 type: "image/webp",
                 quality: mid
             });
-
+				
             onProgress(`compressing ${file.name}, iteration ${i + 1}/${iterations}`);
 
             if (!size || size <= 0) {
@@ -173,13 +173,13 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
     const inName = `in_${id}_${file.name}`;
     const outName = `out_${id}.webp`;
 
-    let low = 10; // Minimum usable quality
+    let low = 0; // Minimum usable quality
     let high = quality; // Start with your desired quality as the max
     let bestBlob = null;
     let lastAttemptBlob = null;
     let currentIteration = 1;
     let size = (maxSize && maxSize > 10000) ? maxSize : undefined;
-    const iterations = size ? 7 : 1; // limits loop to prevent infinite loop
+    const iterations = size ? 6 : 1; // limits loop to prevent infinite loop
     if (!size) {    // if no size limit, force the mid to be equal to the target quality
         low = quality;
         high = quality;
@@ -199,6 +199,7 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
             await ffmpeg.exec([
                 '-i', inName,
                 '-vf', `scale='min(${maxDims},iw)':-1:force_original_aspect_ratio=decrease`,
+					 // '-vf', `scale='min(${maxDims},iw)':-1:force_original_aspect_ratio=decrease:flags=lanczos`,
                 '-vcodec', 'libwebp',
                 '-lossless', '0',
                 '-compression_level', '5', // Lowering to 5 slightly speeds up batches

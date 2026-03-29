@@ -960,21 +960,11 @@ hr {
     .file-meta {
         flex-wrap: nowrap;
         white-space: nowrap;
-        /* padding-bottom: 5px; */
-        /* width: 100%; */
-        /* justify-content: space-evenly; */
     }
 
     .file-item .download-link {
         font-size: 0.8rem;
     }
-
-    /* .file-item>span:first-child {
-        flex-shrink: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    } */
 
     .download-text {
         display: none;

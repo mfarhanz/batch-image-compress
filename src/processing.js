@@ -7,7 +7,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 const picaInstance = pica({ features: ['js', 'wasm', 'ww'] });
 
 // initialise ffmpeg
-const ffmpeg = new FFmpeg();
+let ffmpeg = new FFmpeg();
 
 // create a pool of canvases matching hardware concurrency
 const poolSize = Math.max(1, Math.min(navigator.hardwareConcurrency, 8));   // more than plimit's concurrency count, just to be safe
@@ -168,6 +168,17 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
         });
         onProgress('loaded ffmpeg');
     }
+	 
+	 // clears out any files if any, from previous runs
+    try {
+        const files = await ffmpeg.listDir('/');
+        for (const file of files) {
+            const isUserFile = file.name.startsWith('in_') || file.name.startsWith('out_');
+            if (!file.isDir && isUserFile) await ffmpeg.deleteFile(file.name);
+        }
+    } catch (e) {
+        console.error("Error cleaning up ffmpeg dir: ", e);
+    }
 
     const id = Math.random().toString(36).substring(7);
     const inName = `in_${id}_${file.name}`;
@@ -177,32 +188,45 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
     let high = quality; // Start with your desired quality as the max
     let bestBlob = null;
     let lastAttemptBlob = null;
-    let currentIteration = 1;
-    let size = (maxSize && maxSize > 10000) ? maxSize : undefined;
-    const iterations = size ? 6 : 1; // limits loop to prevent infinite loop
+    let currentIteration = 0;
+    
+	 let compressionLevel = '3';
+	 if (file.size < 10 * 1024 * 1024) {
+		 compressionLevel = '5'; // Small file: Go for max compression
+	 } else if (file.size > 80 * 1024 * 1024) {
+		 compressionLevel = '1'; // Huge file: Prioritize RAM stability
+	 } else if (file.size > 40 * 1024 * 1024) {
+		 compressionLevel = '2'; // Large file: Lean toward speed
+	 }
+    
+	 const size = (maxSize && maxSize > 10000) ? maxSize : undefined;
+	 const iterations = size ? 6 : 1; // limits loop to prevent infinite loop
     if (!size) {    // if no size limit, force the mid to be equal to the target quality
         low = quality;
         high = quality;
     }
-
-    ffmpeg.on('progress', ({ progress }) =>
-        onProgress(`processing ${file.name}, iteration ${currentIteration}/${iterations}: ${Math.round(progress * 100)}%`)
-    );
+	 
+	 let progressHandler;
+    if (onProgress) {
+        progressHandler = ({ progress }) => {
+				onProgress(`processing ${file.name}... ${Math.min(100, Math.round((currentIteration + progress) / iterations * 100))}%`)
+        };
+        ffmpeg.on("progress", progressHandler);
+    }
 
     try {
         await ffmpeg.writeFile(inName, await fetchFile(file));
 
         for (let i = 0; i < iterations; i++) {
             const mid = Math.floor((low + high) / 2);
-            currentIteration = i + 1;
-
+            currentIteration = i;
             await ffmpeg.exec([
                 '-i', inName,
                 '-vf', `scale='min(${maxDims},iw)':-1:force_original_aspect_ratio=decrease`,
 					 // '-vf', `scale='min(${maxDims},iw)':-1:force_original_aspect_ratio=decrease:flags=lanczos`,
                 '-vcodec', 'libwebp',
                 '-lossless', '0',
-                '-compression_level', '5', // Lowering to 5 slightly speeds up batches
+                '-compression_level', compressionLevel,
                 '-q:v', `${mid}`,
                 '-loop', '0',
                 '-preset', 'picture',
@@ -237,11 +261,32 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
 
         return bestBlob || lastAttemptBlob;
     } catch (err) {
-        // Cleanup on failure so the next file doesn't start with a full disk
-        try { await ffmpeg.deleteFile(inName); } catch { /* empty */ }
-        try { await ffmpeg.deleteFile(outName); } catch { /* empty */ }
+        console.error("FFmpeg Fatal Error:", err);
+		  const errorMessage = String(err); 
+		 const isMemoryError = 
+			  errorMessage.includes("memory access out of bounds") || 
+			  errorMessage.includes("RuntimeError") ||
+			  (err && typeof err === 'object' && 'message' in err && err.message.includes("memory"));
+        if (isMemoryError) {
+        console.warn("Detected WASM Memory Crash. Resetting engine...");
+        
+        try {
+            await ffmpeg.terminate();
+        } catch (terminateErr) {
+            // Worker might already be dead, that's fine
+        }
+
+        // Re-initialize the instance
+        ffmpeg = new FFmpeg();
+		  
+		  // Short delay to give browser time to actually clear RAM before loading new ffmpeg vm
+		  await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+        try { await ffmpeg.deleteFile(inName); } catch { /* ignore */ }
+        try { await ffmpeg.deleteFile(outName); } catch { /* ignore */ }
         throw err;
     } finally {
-        ffmpeg.off('progress');
+        if (progressHandler) ffmpeg.off('progress', progressHandler);
     }
 }

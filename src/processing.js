@@ -200,7 +200,7 @@ export async function processImageFrames({ file, maxSize = undefined, maxDims = 
 	 }
     
 	 const size = (maxSize && maxSize > 10000) ? maxSize : undefined;
-	 const iterations = size ? 6 : 1; // limits loop to prevent infinite loop
+	 const iterations = size ? 7 : 1; // limits loop to prevent infinite loop
     if (!size) {    // if no size limit, force the mid to be equal to the target quality
         low = quality;
         high = quality;

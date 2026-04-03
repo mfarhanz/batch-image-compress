@@ -25,6 +25,7 @@ const sizeSlider = document.getElementById("maxFileSize");
 const sizeValue = document.getElementById("sizeValue");
 const statusBar = document.getElementById("statusBar");
 const progressBar = document.getElementById("progressBar");
+const year = document.getElementById("year");
 const summary = document.getElementById("summary");
 const errorCard = document.getElementById("error-card");
 const errorMessage = document.getElementById("error-message");
@@ -58,8 +59,9 @@ zipProgressBar.text.style.fontFamily = "monospace";
 zipProgressBar.text.style.fontSize = "13px";
 zipProgressBar.text.style.color = "#9dbfff";
 
-// Set initial icon
+// Set initial stuff
 themeToggle.innerHTML = moonSVG;
+year.textContent = new Date().getFullYear();
 
 const MAX_BATCH_SIZE = 20;
 const MAX_FILE_BYTES = 100 * 1000 * 1000;

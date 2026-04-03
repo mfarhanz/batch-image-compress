@@ -4,23 +4,25 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Webply - Compress Images to WebP</title>
+    <title>WebPly - Compress Images to WebP</title>
     <meta name="description"
-        content="Compress images and convert JPG, PNG, GIF to WebP online for free. Fast batch WebP converter running in your browser.">
+        content="Compress images and convert JPG, PNG, GIF, BMP, TIFF, and AVIF to WebP efficiently. Fast, private, client-side image compression.">
     <meta name="keywords"
         content="image compressor, webp, webp converter, batch image compressor, convert images to webp, image optimizer">
     <meta name="author" content="Farhan Zia">
     <link rel="canonical" href="https://webply.pages.dev/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta property="og:title" content="Webply - Compress Images to WebP">
+    <meta property="og:title" content="WebPly - Compress Images to WebP">
     <meta property="og:description"
-        content="Webply is a web tool for compressing images by converting them to WebP directly in the browser.">
+        content="Compress images and convert JPG, PNG, GIF, BMP, TIFF, and AVIF to WebP efficiently. Fast, private, client-side image compression.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://webply.pages.dev/">
+    <meta property="og:site_name" content="WebPly">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="WebPly - Compress Images to WebP">
-    <meta name="twitter:description" content="Compress images by converting them to WebP directly in your browser.">
-	 <meta name="google-site-verification" content="kTq-pcYnOpWTlEgZXuKUbxtXB_zgz259wQCzCDntiWI" />
+    <meta name="twitter:description"
+        content="Compress images and convert JPG, PNG, GIF, BMP, TIFF, and AVIF to WebP efficiently. Fast, private, client-side image compression.">
+    <meta name="google-site-verification" content="kTq-pcYnOpWTlEgZXuKUbxtXB_zgz259wQCzCDntiWI" />
     <link rel="stylesheet" href="/src/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,18 +30,45 @@
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "WebPly",
+        "url": "https://webply.pages.dev/"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
         "@type": "WebApplication",
-        "name": "Webply",
-        "url": "https://webply.pages.dev/",
+        "name": "WebPly",
+        "alternateName": "Batch Image Compressor",
+        "description": "Browser-based image compressor that converts PNG, JPG, GIF, BMP, TIFF, and AVIF images to WebP format using client-side processing.",
         "applicationCategory": "MultimediaApplication",
+        "url": "https://webply.pages.dev/",
         "operatingSystem": "Any",
-        "description": "A web tool that compresses images by converting them to WebP directly in the browser.",
+        "browserRequirements": "Requires JavaScript and a modern web browser",
+        "isPartOf": {
+            "@type": "WebSite",
+            "name": "WebPly",
+            "url": "https://webply.pages.dev/"
+        },
+        "featureList": [
+            "Batch image compression",
+            "Instant PNG to WebP conversion",
+            "Client-side processing for privacy",
+            "Offline capability"
+        ],
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
         "author": {
             "@type": "Person",
             "name": "Farhan Zia",
             "url": "https://mfarhanz.dev",
             "sameAs": [
-                "https://mfarhanz.dev", "https://mfarhanz.pages.dev"
+                "https://mfarhanz.dev",
+                "https://mfarhanz.pages.dev"
             ]
         }
     }
@@ -49,16 +78,20 @@
 <body>
     <script type="module" src="/src/main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/progressbar.js"></script>
+
+
     <nav class="navbar">
         <div class="nav-inner">
-            <div class="logo">WebPly</div>
+            <h1 class="logo">
+                <a href="/">WebPly</a>
+            </h1>
 
             <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
                 <!-- SVG icon will be inserted here dynamically -->
             </button>
         </div>
     </nav>
-	 
+
     <div id="app">
         <h2>Batch Image Compressor to WebP</h2>
 
@@ -188,10 +221,19 @@
             <span class="stop-spinner"></span>
         </button>
     </div>
-	 
-	 <footer id="site-footer">
-			&copy; 2026 WebPly
-	 </footer>
+
+    <footer id="site-footer">
+        <div class="footer-links">
+            <a href="/about" class="link">About</a> •
+            <a href="/terms" class="link">Terms of Service</a> •
+            <a href="/privacy" class="link">Privacy</a> •
+            <a href="https://mfarhanz.dev/contact" class="link">Contact</a>
+        </div>
+
+        <div class="footer-copy">
+            &copy; <span id="year"></span> WebPly
+        </div>
+    </footer>
 </body>
 
 </html>

@@ -3,65 +3,16 @@ import pLimit from "p-limit";
 import moonSVG from './icons/moon.svg?raw';
 import sunSVG from './icons/sun.svg?raw';
 import downloadSVG from './icons/download.svg?raw';
+import { router, registerHomeInit } from "./router.js";
 import { processImageSimple, processImageRefined, processImageStrict, processImageFrames } from "./processing";
 
-// const serverUrl = import.meta.env.VITE_SERVER_URL;
-const resultsDiv = document.getElementById("results");
-const qualitySlider = document.getElementById("quality");
-const qualityValue = document.getElementById("qualityValue");
-const folderInput = document.getElementById("folderInput");
-const fileInput = document.getElementById("fileInput");
-const fileInputButton = document.getElementById("fileInputButton");
-const folderInputButton = document.getElementById("folderInputButton");
-const themeToggle = document.getElementById("themeToggle");
-const imageToggle = document.getElementById("toggleImageSettings");
-const sizeToggle = document.getElementById("toggleSizeLimit");
-const hqToggle = document.getElementById("hqToggle");
-const hqWarning = document.getElementById("hqWarning");
-const fsInfo = document.getElementById("fsInfo");
-const imageCard = document.getElementById("imageSettingsCard");
-const sizeCard = document.getElementById("sizeLimitCard");
-const sizeSlider = document.getElementById("maxFileSize");
-const sizeValue = document.getElementById("sizeValue");
-const statusBar = document.getElementById("statusBar");
-const progressBar = document.getElementById("progressBar");
-const year = document.getElementById("year");
-const summary = document.getElementById("summary");
-const errorCard = document.getElementById("error-card");
-const errorMessage = document.getElementById("error-message");
-const errorInfo = document.getElementById("error-info");
-const errorList = document.getElementById("error-list");
-const errorArrow = document.getElementById("error-arrow");
-const errorHeader = document.getElementById("error-header");
-const stopButton = document.getElementById("stop-btn");
-const downloadAll = document.getElementById("download-zip-btn");
-const downloadAllWrapper = document.getElementById("download-zip-wrapper");
-const zipProgressContainer = document.getElementById("zip-progress");
-// eslint-disable-next-line no-undef
-const zipProgressBar = new ProgressBar.Circle(zipProgressContainer, {
-    strokeWidth: 6,
-    color: "#c7d2fe",
-    trailColor: "#e5e7eb",
-    trailWidth: 6,
-    easing: "easeInOut",
-    duration: 20,
-    text: {
-        autoStyleContainer: false
-    },
-    from: { color: "#c7d2fe" },
-    to: { color: "#c7d2fe" },
-    step: function (state, circle) {
-        const value = Math.round(circle.value() * 100);
-        circle.setText(value ? `${value}%` : "");
-    }
-});
-zipProgressBar.text.style.fontFamily = "monospace";
-zipProgressBar.text.style.fontSize = "13px";
-zipProgressBar.text.style.color = "#9dbfff";
-
-// Set initial stuff
-themeToggle.innerHTML = moonSVG;
-year.textContent = new Date().getFullYear();
+let resultsDiv, qualitySlider, qualityValue, folderInput, fileInput,
+    fileInputButton, folderInputButton, imageToggle,
+    sizeToggle, hqToggle, hqWarning, fsInfo, imageCard, sizeCard,
+    sizeSlider, sizeValue, statusBar, progressBar, summary,
+    errorCard, errorMessage, errorInfo, errorList, errorArrow,
+    errorHeader, stopButton, downloadAll, downloadAllWrapper,
+    zipProgressContainer, zipProgressBar;
 
 const MAX_BATCH_SIZE = 20;
 const MAX_FILE_BYTES = 100 * 1000 * 1000;
@@ -75,13 +26,11 @@ let failedFiles = [];
 let cancelProcessing = false;
 let darkMode = false;
 
-updateCards();
-
-imageToggle.addEventListener("change", () => updateCards(imageToggle));
-sizeToggle.addEventListener("change", () => {
-    updateCards(sizeToggle);
-    fsInfo.classList.toggle("hidden", !sizeToggle.checked);
-});
+// Set up common initial elements
+const themeToggle = document.getElementById("themeToggle");
+const year = document.getElementById("year");
+themeToggle.innerHTML = darkMode ? sunSVG : moonSVG;
+year.textContent = new Date().getFullYear();
 
 themeToggle.addEventListener('click', () => {
     darkMode = !darkMode;
@@ -89,109 +38,180 @@ themeToggle.addEventListener('click', () => {
     themeToggle.innerHTML = darkMode ? sunSVG : moonSVG;
 });
 
-folderInput.addEventListener("change", () => {
-    fileInput.value = ""; // clear individual files
-});
+export function initHome() {
+    resultsDiv = document.getElementById("results");
+    qualitySlider = document.getElementById("quality");
+    qualityValue = document.getElementById("qualityValue");
+    folderInput = document.getElementById("folderInput");
+    fileInput = document.getElementById("fileInput");
+    fileInputButton = document.getElementById("fileInputButton");
+    folderInputButton = document.getElementById("folderInputButton");
+    imageToggle = document.getElementById("toggleImageSettings");
+    sizeToggle = document.getElementById("toggleSizeLimit");
+    hqToggle = document.getElementById("hqToggle");
+    hqWarning = document.getElementById("hqWarning");
+    fsInfo = document.getElementById("fsInfo");
+    imageCard = document.getElementById("imageSettingsCard");
+    sizeCard = document.getElementById("sizeLimitCard");
+    sizeSlider = document.getElementById("maxFileSize");
+    sizeValue = document.getElementById("sizeValue");
+    statusBar = document.getElementById("statusBar");
+    progressBar = document.getElementById("progressBar");
+    summary = document.getElementById("summary");
+    errorCard = document.getElementById("error-card");
+    errorMessage = document.getElementById("error-message");
+    errorInfo = document.getElementById("error-info");
+    errorList = document.getElementById("error-list");
+    errorArrow = document.getElementById("error-arrow");
+    errorHeader = document.getElementById("error-header");
+    stopButton = document.getElementById("stop-btn");
+    downloadAll = document.getElementById("download-zip-btn");
+    downloadAllWrapper = document.getElementById("download-zip-wrapper");
+    zipProgressContainer = document.getElementById("zip-progress");
 
-fileInput.addEventListener("change", () => {
-    folderInput.value = ""; // clear folder selection
-});
-
-qualitySlider.addEventListener("input", () => {
-    qualityValue.textContent = qualitySlider.value;
-});
-
-fileInputButton.addEventListener("click", () => {
-    const input = document.getElementById("fileInput");
-    handleUpload(input.files);
-});
-
-folderInputButton.addEventListener("click", () => {
-    const input = document.getElementById("folderInput");
-    handleUpload(input.files);
-});
-
-hqToggle.addEventListener("change", () => {
-    hqWarning.classList.toggle("hidden", !hqToggle.checked);
-});
-
-errorHeader.onclick = () => {
-    if (errorList.classList.contains("expanded")) {
-        // collapse
-        errorInfo.style.display = "none";
-        errorList.style.maxHeight = "0px";
-        errorList.style.padding = "0 12px";
-        errorList.classList.remove("expanded");
-        errorArrow.textContent = "▼";
-    } else {
-        // expand dynamically to fit content
-        errorInfo.style.display = "block";
-        errorList.style.maxHeight = errorList.scrollHeight + "px";
-        errorList.style.padding = "8px 12px";
-        errorList.classList.add("expanded");
-        errorArrow.textContent = "▲";
-    }
-};
-
-sizeSlider.addEventListener("input", () => {
-    const val = Number(sizeSlider.value);
-    let snapped;
-
-    if (val <= 1000) {
-        snapped = Math.round(val / 50) * 50;
-        sizeValue.textContent = snapped + " KB";
-    }
-    else {
-        if (val <= 3000) snapped = Math.round(val / 500) * 500;
-        else snapped = Math.round(val / 1000) * 1000;
-
-        sizeValue.textContent = (snapped / 1000).toFixed(2).replace(/\.?0+$/, "") + " MB";
+    if (zipProgressContainer) {
+        zipProgressContainer.innerHTML = '';
+        // eslint-disable-next-line no-undef
+        zipProgressBar = new ProgressBar.Circle(zipProgressContainer, {
+            strokeWidth: 6,
+            color: "#c7d2fe",
+            trailColor: "#e5e7eb",
+            trailWidth: 6,
+            easing: "easeInOut",
+            duration: 20,
+            text: {
+                autoStyleContainer: false
+            },
+            from: { color: "#c7d2fe" },
+            to: { color: "#c7d2fe" },
+            step: function (state, circle) {
+                const value = Math.round(circle.value() * 100);
+                circle.setText(value ? `${value}%` : "");
+            }
+        });
+        zipProgressBar.text.style.fontFamily = "monospace";
+        zipProgressBar.text.style.fontSize = "13px";
+        zipProgressBar.text.style.color = "#9dbfff";
     }
 
-    sizeSlider.value = snapped;
-});
+    // Exit if we are not on the home page
+    if (!resultsDiv) return;
 
-stopButton.addEventListener("click", () => {
-    if (cancelProcessing) return;
-    cancelProcessing = true;
-    stopButton.classList.add("loading");
-});
+    updateCards();
+    attachListeners();
+}
 
-downloadAll.addEventListener("click", async () => {
-    if (!fileBuffer.length) return alert("No files to download!");
+function attachListeners() {
+    imageToggle.addEventListener("change", () => updateCards(imageToggle));
+    sizeToggle.addEventListener("change", () => {
+        updateCards(sizeToggle);
+        fsInfo.classList.toggle("hidden", !sizeToggle.checked);
+    });
 
-    zipProgressContainer.classList.add("show");
-    zipProgressBar.set(0);
-    downloadAll.disabled = true;
-    const total = fileBuffer.length;
-    let completed = 0;
+    folderInput.addEventListener("change", () => {
+        fileInput.value = ""; // clear individual files
+    });
 
-    const zip = new JSZip();
-    const folder = zip.folder("bulk-download");
+    fileInput.addEventListener("change", () => {
+        folderInput.value = ""; // clear folder selection
+    });
 
-    // Fetch all files and add to zip
-    for (const file of fileBuffer) {
-        folder.file(file.name, file.blob);
-        completed++;
-        zipProgressBar.animate(completed / total);
-    }
+    qualitySlider.addEventListener("input", () => {
+        qualityValue.textContent = qualitySlider.value;
+    });
 
-    // Generate zip and trigger download
-    const content = await zip.generateAsync({ type: "blob" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(content);
-    link.href = url;
-    link.download = "files.zip";
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    fileInputButton.addEventListener("click", () => {
+        const input = document.getElementById("fileInput");
+        handleUpload(input.files);
+    });
 
-    zipProgressBar.animate(1);
-    // Hide after done
-    setTimeout(() => {
-        zipProgressContainer.classList.remove("show");
-        downloadAll.disabled = false;
-    }, 2000);
-});
+    folderInputButton.addEventListener("click", () => {
+        const input = document.getElementById("folderInput");
+        handleUpload(input.files);
+    });
+
+    hqToggle.addEventListener("change", () => {
+        hqWarning.classList.toggle("hidden", !hqToggle.checked);
+    });
+
+    errorHeader.onclick = () => {
+        if (errorList.classList.contains("expanded")) {
+            // collapse
+            errorInfo.style.display = "none";
+            errorList.style.maxHeight = "0px";
+            errorList.style.padding = "0 12px";
+            errorList.classList.remove("expanded");
+            errorArrow.textContent = "▼";
+        } else {
+            // expand dynamically to fit content
+            errorInfo.style.display = "block";
+            errorList.style.maxHeight = errorList.scrollHeight + "px";
+            errorList.style.padding = "8px 12px";
+            errorList.classList.add("expanded");
+            errorArrow.textContent = "▲";
+        }
+    };
+
+    sizeSlider.addEventListener("input", () => {
+        const val = Number(sizeSlider.value);
+        let snapped;
+
+        if (val <= 1000) {
+            snapped = Math.round(val / 50) * 50;
+            sizeValue.textContent = snapped + " KB";
+        }
+        else {
+            if (val <= 3000) snapped = Math.round(val / 500) * 500;
+            else snapped = Math.round(val / 1000) * 1000;
+
+            sizeValue.textContent = (snapped / 1000).toFixed(2).replace(/\.?0+$/, "") + " MB";
+        }
+
+        sizeSlider.value = snapped;
+    });
+
+    stopButton.addEventListener("click", () => {
+        if (cancelProcessing) return;
+        cancelProcessing = true;
+        stopButton.classList.add("loading");
+    });
+
+    downloadAll.addEventListener("click", async () => {
+        if (!fileBuffer.length) return alert("No files to download!");
+
+        zipProgressContainer.classList.add("show");
+        zipProgressBar.set(0);
+        downloadAll.disabled = true;
+        const total = fileBuffer.length;
+        let completed = 0;
+
+        const zip = new JSZip();
+        const folder = zip.folder("bulk-download");
+
+        // Fetch all files and add to zip
+        for (const file of fileBuffer) {
+            folder.file(file.name, file.blob);
+            completed++;
+            zipProgressBar.animate(completed / total);
+        }
+
+        // Generate zip and trigger download
+        const content = await zip.generateAsync({ type: "blob" });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(content);
+        link.href = url;
+        link.download = "files.zip";
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        zipProgressBar.animate(1);
+        // Hide after done
+        setTimeout(() => {
+            zipProgressContainer.classList.remove("show");
+            downloadAll.disabled = false;
+        }, 2000);
+    });
+}
 
 function setInputsDisabled(card, disabled) {
     card.querySelectorAll("input").forEach(el => {
@@ -306,7 +326,7 @@ function createFileItem(file) {
     downloadLink.appendChild(label);
 
     // append RIGHT SIDE in order
-    
+
     rightSide.appendChild(sizeContainer);
     rightSide.appendChild(percentChangeSpan);
     rightSide.appendChild(downloadLink);
@@ -652,3 +672,6 @@ export async function handleUpload(files) {
         cancelProcessing = false;
     }, 1000);
 }
+
+registerHomeInit(initHome);
+router();

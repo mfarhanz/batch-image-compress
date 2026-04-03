@@ -1,0 +1,145 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Privacy Policy | WebPly</title>
+
+    <meta name="description"
+        content="WebPly privacy policy. Learn how your images are processed locally in your browser and how your data is handled.">
+    <meta name="author" content="Farhan Zia">
+
+    <link rel="canonical" href="https://webply.pages.dev/privacy">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+    <meta property="og:title" content="Privacy Policy | WebPly">
+    <meta property="og:description" content="Learn how WebPly handles image processing and protects your privacy.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://webply.pages.dev/privacy">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Privacy Policy | WebPly">
+    <meta name="twitter:description" content="Learn how WebPly handles image processing and protects your privacy.">
+
+    <link rel="stylesheet" href="/src/style.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+
+    <nav class="navbar">
+        <div class="nav-inner">
+            <h1 class="logo">
+                <a href="/">WebPly</a>
+            </h1>
+            <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode"></button>
+        </div>
+    </nav>
+
+    <div id="app">
+
+        <h2>Privacy Policy</h2>
+
+        <p class="description">
+            WebPly is designed to prioritize user privacy. This policy explains how your data is handled when using the
+            WebPly image compression tool.
+        </p>
+
+        <hr>
+
+        <section>
+            <h3>Client-Side Processing</h3>
+            <p>
+                All image compression and conversion performed by WebPly occurs directly within your web browser. Images
+                you upload are processed locally on your device and are <strong>not uploaded to any server</strong>.
+            </p>
+        </section>
+
+        <section>
+            <h3>Data Collection</h3>
+            <p>
+                WebPly does not collect, store, or transmit the images you process using the tool. No uploaded files
+                leave your device.
+            </p>
+            <p>
+                Standard website analytics or logs from the hosting platform may collect limited technical information
+                such as browser type or general usage statistics. This information does not include the images you
+                upload.
+            </p>
+        </section>
+
+        <section>
+            <h3>Cookies</h3>
+            <p>
+                WebPly may store small preference values locally in your browser, such as theme settings (light or dark
+                mode). These preferences remain on your device and are not shared with external services.
+            </p>
+        </section>
+
+        <section>
+            <h3>Third-Party Services</h3>
+            <p>
+                WebPly may link to external websites for informational purposes. These sites operate independently and
+                have their own privacy policies.
+            </p>
+        </section>
+
+        <section>
+            <h3>Changes to This Policy</h3>
+            <p>
+                This privacy policy may be updated from time to time. Updates will be reflected on this page with a
+                revised date if applicable.
+            </p>
+        </section>
+
+        <section>
+            <h3>Contact</h3>
+            <p>
+                If you have questions regarding this policy, you can contact the developer at
+                <a class="link" href="https://mfarhanz.dev/contact">mfarhanz.dev/contact</a>.
+            </p>
+        </section>
+
+    </div>
+
+    <footer id="site-footer">
+        <div class="footer-links">
+            <a href="/terms" class="link">Terms of Service</a> •
+            <a href="/privacy" class="link">Privacy</a> •
+            <a href="https://mfarhanz.dev/contact" class="link">Contact</a>
+        </div>
+
+        <div class="footer-copy">
+            &copy; <span id="year"></span> WebPly
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById("year").textContent = new Date().getFullYear();
+
+        const toggle = document.getElementById("themeToggle");
+        const savedTheme = localStorage.getItem("theme");
+
+        if (savedTheme === "dark") {
+            document.body.classList.add("dark");
+        }
+
+        toggle.addEventListener("click", () => {
+            document.body.classList.toggle("dark");
+            localStorage.setItem(
+                "theme",
+                document.body.classList.contains("dark") ? "dark" : "light"
+            );
+        });
+    </script>
+
+</body>
+
+</html>

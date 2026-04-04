@@ -825,7 +825,7 @@ hr {
     position: fixed;
     bottom: 26px;
     right: 20px;
-    padding: 12px 17px;
+    padding: 12px 12px;
     font-size: 20px;
     font-weight: 600;
     border: none;
@@ -871,7 +871,7 @@ hr {
     padding: 15px 16px;
 }
 
-#stop-btn.loading .stop-text {
+#stop-btn.loading .stop-icon {
     display: none;
 }
 

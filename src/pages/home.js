@@ -123,7 +123,6 @@ export default `
             </button>
         </div>
         <button id="stop-btn" class="hidden">
-            <span class="stop-text">⏹</span>
             <span class="stop-spinner"></span>
         </button>
 `

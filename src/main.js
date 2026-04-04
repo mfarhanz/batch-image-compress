@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import pLimit from "p-limit";
 import moonSVG from './icons/moon.svg?raw';
 import sunSVG from './icons/sun.svg?raw';
+import stopSVG from "./icons/stop.svg?raw";
 import downloadSVG from './icons/download.svg?raw';
 import { router, registerHomeInit } from "./router.js";
 import { processImageSimple, processImageRefined, processImageStrict, processImageFrames } from "./processing";
@@ -68,6 +69,8 @@ export function initHome() {
     downloadAll = document.getElementById("download-zip-btn");
     downloadAllWrapper = document.getElementById("download-zip-wrapper");
     zipProgressContainer = document.getElementById("zip-progress");
+
+    stopButton.insertAdjacentHTML("afterbegin", stopSVG);
 
     if (zipProgressContainer) {
         zipProgressContainer.innerHTML = '';
